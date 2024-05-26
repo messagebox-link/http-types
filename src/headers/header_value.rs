@@ -2,11 +2,11 @@ use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display};
 use std::str::FromStr;
 
-use crate::headers::HeaderValues;
 #[cfg(feature = "cookies")]
-use crate::Cookie;
+use crate::cookies::Cookie;
+use crate::headers::HeaderValues;
+use crate::mime::Mime;
 use crate::Error;
-use crate::Mime;
 
 /// A header value.
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -15,17 +15,15 @@ pub struct HeaderValue {
 }
 
 impl HeaderValue {
-    /// Create a new `HeaderValue` from a Vec of ASCII bytes.
+    /// Create a new `HeaderValue` from a vec of valid ascii or utf8 bytes.
     ///
     /// # Error
     ///
     /// This function will error if the bytes is not valid ASCII.
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
-        crate::ensure!(bytes.is_ascii(), "Bytes should be valid ASCII");
-
-        // This is permitted because ASCII is valid UTF-8, and we just checked that.
-        let string = unsafe { String::from_utf8_unchecked(bytes) };
-        Ok(Self { inner: string })
+        Ok(Self {
+            inner: String::from_utf8(bytes)?,
+        })
     }
 
     /// Converts a vector of bytes to a `HeaderValue` without checking that the string contains
@@ -50,26 +48,20 @@ impl HeaderValue {
 
 impl From<Mime> for HeaderValue {
     fn from(mime: Mime) -> Self {
-        HeaderValue {
-            inner: format!("{}", mime),
-        }
+        HeaderValue { inner: format!("{}", mime) }
     }
 }
 
 #[cfg(feature = "cookies")]
 impl From<Cookie<'_>> for HeaderValue {
     fn from(cookie: Cookie<'_>) -> Self {
-        HeaderValue {
-            inner: cookie.to_string(),
-        }
+        HeaderValue { inner: cookie.to_string() }
     }
 }
 
 impl From<&Mime> for HeaderValue {
     fn from(mime: &Mime) -> Self {
-        HeaderValue {
-            inner: format!("{}", mime),
-        }
+        HeaderValue { inner: format!("{}", mime) }
     }
 }
 
@@ -80,10 +72,8 @@ impl FromStr for HeaderValue {
     ///
     /// This checks it's valid ASCII.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        crate::ensure!(s.is_ascii(), "String slice should be valid ASCII");
-        Ok(Self {
-            inner: String::from(s),
-        })
+        // crate::ensure!(s.is_ascii(), "String slice should be valid ASCII");
+        Ok(Self { inner: String::from(s) })
     }
 }
 
@@ -125,7 +115,7 @@ impl PartialEq<String> for HeaderValue {
     }
 }
 
-impl<'a> PartialEq<&String> for HeaderValue {
+impl PartialEq<&String> for HeaderValue {
     fn eq(&self, other: &&String) -> bool {
         &&self.inner == other
     }
@@ -134,10 +124,7 @@ impl<'a> PartialEq<&String> for HeaderValue {
 impl From<HeaderValues> for HeaderValue {
     fn from(mut other: HeaderValues) -> Self {
         other.inner.reverse();
-        other
-            .inner
-            .pop()
-            .expect("HeaderValues should contain at least one value")
+        other.inner.pop().expect("HeaderValues should contain at least one value")
     }
 }
 
@@ -149,5 +136,7 @@ mod tests {
     fn test_debug() {
         let header_value = HeaderValue::from_str("foo0").unwrap();
         assert_eq!(format!("{:?}", header_value), "\"foo0\"");
+        let header_value = HeaderValue::from_str("Â").unwrap();
+        assert_eq!(format!("{:?}", header_value), "\"Â\"");
     }
 }
